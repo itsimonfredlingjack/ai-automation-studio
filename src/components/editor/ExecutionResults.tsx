@@ -1,6 +1,7 @@
 import { X, ChevronUp, ChevronDown, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { useExecutionStore } from "@/stores/executionStore";
 import { useState } from "react";
+import { ExecutionSharePrompt } from "@/components/editor/ExecutionSharePrompt";
 
 export function ExecutionResults() {
   const { result, error, mode, showResults, closeResults } =
@@ -48,6 +49,8 @@ export function ExecutionResults() {
       {/* Body */}
       {expanded && (
         <div className="max-h-64 overflow-y-auto p-4">
+          <ExecutionSharePrompt error={error} mode={mode} result={result} />
+
           {error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
               {error}
