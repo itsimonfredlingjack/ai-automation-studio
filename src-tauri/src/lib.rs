@@ -33,6 +33,7 @@ pub fn run() {
             webhooks: Mutex::new(WebhookManager::new(db_path)),
         })
         .invoke_handler(tauri::generate_handler![
+            commands::analytics::track_event,
             commands::workflow::save_workflow,
             commands::workflow::load_workflow,
             commands::workflow::list_workflows,

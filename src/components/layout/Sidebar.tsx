@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { useWorkflowStore } from "@/stores/workflowStore";
 import { useFlowStore } from "@/stores/flowStore";
-import type { Node, Edge } from "@xyflow/react";
 import type { Workflow } from "@/types/workflow";
 import { Plus, Trash2, Save } from "lucide-react";
+import { toReactFlowGraph } from "@/lib/reactFlowWorkflow";
+import { buildWorkflowPayload } from "@/lib/workflowPayload";
+import { TemplateSharePanel } from "@/components/layout/TemplateSharePanel";
 
 export function Sidebar() {
   const {
@@ -32,22 +34,9 @@ export function Sidebar() {
 
   const handleOpen = async (id: string) => {
     const workflow = await openWorkflow(id);
-    // Convert workflow nodes/edges to React Flow format
-    const rfNodes: Node[] = workflow.nodes.map((n) => ({
-      id: n.id,
-      type: n.node_type,
-      position: { x: n.position.x, y: n.position.y },
-      data: n.data as Record<string, unknown>,
-    }));
-    const rfEdges: Edge[] = workflow.edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      sourceHandle: e.source_handle ?? undefined,
-      targetHandle: e.target_handle ?? undefined,
-    }));
-    setNodes(rfNodes);
-    setEdges(rfEdges);
+    const graph = toReactFlowGraph(workflow);
+    setNodes(graph.nodes);
+    setEdges(graph.edges);
   };
 
   const handleSave = async () => {
@@ -56,27 +45,14 @@ export function Sidebar() {
     const current = workflows.find((w) => w.id === currentWorkflowId);
     if (!current) return;
 
-    const workflow: Workflow = {
-      id: currentWorkflowId,
+    const workflow: Workflow = buildWorkflowPayload({
+      workflowId: currentWorkflowId,
       name: current.name,
       description: current.description,
-      nodes: nodes.map((n) => ({
-        id: n.id,
-        node_type: n.type ?? "text_input",
-        position: { x: n.position.x, y: n.position.y },
-        data: n.data as Record<string, unknown>,
-      })),
-      edges: edges.map((e) => ({
-        id: e.id,
-        source: e.source,
-        target: e.target,
-        source_handle: e.sourceHandle ?? undefined,
-        target_handle: e.targetHandle ?? undefined,
-      })),
-      created_at: current.created_at,
-      updated_at: new Date().toISOString(),
-    };
-
+      createdAt: current.created_at,
+      nodes,
+      edges,
+    });
     await saveCurrentWorkflow(workflow);
   };
 
@@ -128,6 +104,8 @@ export function Sidebar() {
           </button>
         </div>
       )}
+
+      <TemplateSharePanel />
 
       {/* Workflow list */}
       <div className="flex-1 overflow-y-auto p-2">

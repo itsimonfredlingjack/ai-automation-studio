@@ -63,3 +63,10 @@ export async function stopWebhook(workflowId: string): Promise<void> {
 export async function listWebhooks(): Promise<WebhookInfo[]> {
   return invoke("list_webhooks");
 }
+
+export async function trackEvent(
+  eventName: string,
+  properties: Record<string, unknown> = {}
+): Promise<void> {
+  return invoke("track_event", { eventName, properties });
+}

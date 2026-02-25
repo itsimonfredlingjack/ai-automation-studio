@@ -3,37 +3,7 @@ import { useExecutionStore } from "@/stores/executionStore";
 import { useWorkflowStore } from "@/stores/workflowStore";
 import { useFlowStore } from "@/stores/flowStore";
 import * as api from "@/lib/tauri";
-import type { Workflow } from "@/types/workflow";
-
-function buildWorkflowPayload(
-  workflowId: string,
-  name: string,
-  description: string | undefined,
-  createdAt: string,
-  nodes: ReturnType<typeof useFlowStore.getState>["nodes"],
-  edges: ReturnType<typeof useFlowStore.getState>["edges"]
-): Workflow {
-  return {
-    id: workflowId,
-    name,
-    description,
-    nodes: nodes.map((n) => ({
-      id: n.id,
-      node_type: n.type ?? "text_input",
-      position: { x: n.position.x, y: n.position.y },
-      data: n.data as Record<string, unknown>,
-    })),
-    edges: edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      source_handle: e.sourceHandle ?? undefined,
-      target_handle: e.targetHandle ?? undefined,
-    })),
-    created_at: createdAt,
-    updated_at: new Date().toISOString(),
-  };
-}
+import { buildWorkflowPayload } from "@/lib/workflowPayload";
 
 export function Toolbar() {
   const { isRunning, mode, startExecution, setResult, setError } =
@@ -52,14 +22,14 @@ export function Toolbar() {
 
     try {
       // Auto-save before executing
-      const workflow = buildWorkflowPayload(
-        currentWorkflowId,
-        current.name,
-        current.description,
-        current.created_at,
+      const workflow = buildWorkflowPayload({
+        workflowId: currentWorkflowId,
+        name: current.name,
+        description: current.description,
+        createdAt: current.created_at,
         nodes,
-        edges
-      );
+        edges,
+      });
       await saveCurrentWorkflow(workflow);
 
       if (runMode === "test") {
