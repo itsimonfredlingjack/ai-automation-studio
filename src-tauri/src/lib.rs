@@ -1,5 +1,6 @@
 mod commands;
 mod db;
+mod automation;
 pub mod engine;
 mod error;
 mod models;
@@ -9,6 +10,8 @@ mod webhook;
 use rusqlite::Connection;
 use state::AppState;
 use std::sync::Mutex;
+use automation::manager::AutomationManager;
+use tauri::Manager;
 use webhook::manager::WebhookManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -28,12 +31,38 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
             db: Mutex::new(conn),
             webhooks: Mutex::new(WebhookManager::new(db_path)),
+            automations: Mutex::new(AutomationManager::new(
+                app_dir.join("synapse.db"),
+                cfg!(debug_assertions),
+            )),
+        })
+        .setup(|app| {
+            let state = app.state::<AppState>();
+            commands::automation::initialize_automation_runner(&state)
+                .map_err(|e| e.to_string())?;
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::analytics::track_event,
+            commands::automation::list_watches,
+            commands::automation::create_watch,
+            commands::automation::update_watch,
+            commands::automation::toggle_watch,
+            commands::automation::delete_watch,
+            commands::automation::list_automation_runs,
+            commands::automation::get_automation_runner_enabled,
+            commands::automation::set_automation_runner_enabled,
+            commands::automation_schedule::list_schedules,
+            commands::automation_schedule::create_schedule,
+            commands::automation_schedule::toggle_schedule,
+            commands::automation_schedule::delete_schedule,
+            commands::automation_schedule::list_schedule_runs,
+            commands::automation_ops::run_watch_now,
+            commands::automation_ops::get_last_failed_run,
             commands::workflow::save_workflow,
             commands::workflow::load_workflow,
             commands::workflow::list_workflows,

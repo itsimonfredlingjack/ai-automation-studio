@@ -1,6 +1,7 @@
 import { ReactFlowProvider } from "@xyflow/react";
 import { FlowEditor } from "@/components/editor/FlowEditor";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { AutomationCommandOverlay } from "@/components/layout/AutomationCommandOverlay";
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <main className="flex-1">
           <FlowEditor />
         </main>
+        <AutomationCommandOverlay />
       </div>
     </ReactFlowProvider>
   );

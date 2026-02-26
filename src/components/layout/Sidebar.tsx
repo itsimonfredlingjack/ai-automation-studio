@@ -6,6 +6,7 @@ import { Plus, Trash2, Save } from "lucide-react";
 import { toReactFlowGraph } from "@/lib/reactFlowWorkflow";
 import { buildWorkflowPayload } from "@/lib/workflowPayload";
 import { TemplateSharePanel } from "@/components/layout/TemplateSharePanel";
+import { AutomationPanel } from "@/components/layout/AutomationPanel";
 
 export function Sidebar() {
   const {
@@ -106,6 +107,7 @@ export function Sidebar() {
       )}
 
       <TemplateSharePanel />
+      <AutomationPanel />
 
       {/* Workflow list */}
       <div className="flex-1 overflow-y-auto p-2">

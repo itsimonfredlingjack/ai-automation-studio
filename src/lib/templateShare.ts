@@ -1,42 +1,117 @@
 import type { Workflow, WorkflowEdge, WorkflowNode } from "@/types/workflow";
+import { type TemplateRemixMetadata } from "@/lib/templateRemix";
+import { parseTemplatePayload } from "@/lib/templatePayloadParser";
 
 export interface WorkflowTemplatePayload {
   version: 1;
   name: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
+  remix?: TemplateRemixMetadata;
+}
+
+export type TemplateInputSource =
+  | "raw_link"
+  | "encoded_payload"
+  | "invite_message";
+
+export interface ParsedTemplateInput {
+  payload: WorkflowTemplatePayload;
+  source: TemplateInputSource;
+}
+
+interface TemplatePayloadOptions {
+  remix?: TemplateRemixMetadata;
 }
 
 const TEMPLATE_PREFIX = "synapse://template?data=";
+const RAW_LINK_PATTERN = /^synapse:\/\/template\?data=([A-Za-z0-9\-_]+)$/;
+const ENCODED_PATTERN = /^[A-Za-z0-9\-_]+$/;
+const EMBEDDED_LINK_PATTERN = /synapse:\/\/template\?data=([A-Za-z0-9\-_]+)/;
 
 export function createTemplatePayload(
-  workflow: Workflow
+  workflow: Workflow,
+  options: TemplatePayloadOptions = {}
 ): WorkflowTemplatePayload {
-  return {
+  const payload: WorkflowTemplatePayload = {
     version: 1,
     name: workflow.name,
     nodes: workflow.nodes,
     edges: workflow.edges,
   };
+
+  if (options.remix) {
+    payload.remix = options.remix;
+  }
+
+  return payload;
 }
 
 export function createTemplateLink(payload: WorkflowTemplatePayload): string {
   return `${TEMPLATE_PREFIX}${encodePayload(payload)}`;
 }
 
-export function parseTemplateLink(value: string): WorkflowTemplatePayload {
-  const trimmed = value.trim();
-  const encoded = trimmed.startsWith(TEMPLATE_PREFIX)
-    ? trimmed.slice(TEMPLATE_PREFIX.length)
-    : trimmed;
+export function createTemplateInviteMessage(
+  workflow: Workflow,
+  options: TemplatePayloadOptions = {}
+): string {
+  const payload = createTemplatePayload(workflow, options);
+  const link = createTemplateLink(payload);
+  const lines = [
+    `I built "${workflow.name}" in Synapse.`,
+    `${workflow.nodes.length} nodes, ${workflow.edges.length} connections.`,
+  ];
 
+  if (payload.remix) {
+    lines.push(
+      `Remix chain #${payload.remix.chain_depth} from "${payload.remix.root_template_name}".`
+    );
+  }
+
+  lines.push(
+    "Open Synapse, paste this full message into the import box, and click import:",
+    link
+  );
+  return lines.join("\n");
+}
+
+export function parseTemplateInput(value: string): ParsedTemplateInput {
+  const { encoded, source } = extractEncodedPayload(value);
   if (!encoded) {
     throw new Error("Template link is empty.");
   }
 
   const decoded = decodePayload(encoded);
   const parsed: unknown = JSON.parse(decoded);
-  return parsePayload(parsed);
+  return {
+    payload: parseTemplatePayload(parsed),
+    source,
+  };
+}
+
+export function parseTemplateLink(value: string): WorkflowTemplatePayload {
+  return parseTemplateInput(value).payload;
+}
+
+function extractEncodedPayload(
+  value: string
+): { encoded: string; source: TemplateInputSource } {
+  const trimmed = value.trim();
+  const rawLinkMatch = trimmed.match(RAW_LINK_PATTERN);
+  if (rawLinkMatch) {
+    return { encoded: rawLinkMatch[1], source: "raw_link" };
+  }
+
+  if (ENCODED_PATTERN.test(trimmed)) {
+    return { encoded: trimmed, source: "encoded_payload" };
+  }
+
+  const embeddedMatch = trimmed.match(EMBEDDED_LINK_PATTERN);
+  if (embeddedMatch) {
+    return { encoded: embeddedMatch[1], source: "invite_message" };
+  }
+
+  throw new Error("No template link found in pasted text.");
 }
 
 function encodePayload(payload: WorkflowTemplatePayload): string {
@@ -60,91 +135,4 @@ function decodePayload(encoded: string): string {
   const binary = atob(`${normalized}${padding}`);
   const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
   return new TextDecoder().decode(bytes);
-}
-
-function parsePayload(value: unknown): WorkflowTemplatePayload {
-  if (!isObject(value)) {
-    throw new Error("Invalid template payload.");
-  }
-
-  const version = value.version;
-  const name = value.name;
-  const nodes = value.nodes;
-  const edges = value.edges;
-
-  if (version !== 1) {
-    throw new Error("Unsupported template version.");
-  }
-
-  if (typeof name !== "string" || !name.trim()) {
-    throw new Error("Template name is invalid.");
-  }
-
-  if (!Array.isArray(nodes) || !Array.isArray(edges)) {
-    throw new Error("Template graph is invalid.");
-  }
-
-  return {
-    version: 1,
-    name: name.trim(),
-    nodes: nodes.map(parseNode),
-    edges: edges.map(parseEdge),
-  };
-}
-
-function parseNode(value: unknown): WorkflowNode {
-  if (!isObject(value)) {
-    throw new Error("Template node is invalid.");
-  }
-
-  if (typeof value.id !== "string" || typeof value.node_type !== "string") {
-    throw new Error("Template node identity is invalid.");
-  }
-
-  if (!isObject(value.position)) {
-    throw new Error("Template node position is invalid.");
-  }
-
-  const position = value.position;
-  if (typeof position.x !== "number" || typeof position.y !== "number") {
-    throw new Error("Template node coordinates are invalid.");
-  }
-
-  return {
-    id: value.id,
-    node_type: value.node_type,
-    position: { x: position.x, y: position.y },
-    data: isObject(value.data) ? value.data : {},
-  };
-}
-
-function parseEdge(value: unknown): WorkflowEdge {
-  if (!isObject(value)) {
-    throw new Error("Template edge is invalid.");
-  }
-
-  if (
-    typeof value.id !== "string" ||
-    typeof value.source !== "string" ||
-    typeof value.target !== "string"
-  ) {
-    throw new Error("Template edge identity is invalid.");
-  }
-
-  const sourceHandle =
-    typeof value.source_handle === "string" ? value.source_handle : undefined;
-  const targetHandle =
-    typeof value.target_handle === "string" ? value.target_handle : undefined;
-
-  return {
-    id: value.id,
-    source: value.source,
-    target: value.target,
-    source_handle: sourceHandle,
-    target_handle: targetHandle,
-  };
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

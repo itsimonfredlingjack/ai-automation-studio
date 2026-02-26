@@ -1,5 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Workflow, WorkflowMetadata } from "@/types/workflow";
+import type {
+  AutomationRun,
+  AutomationSchedule,
+  AutomationScheduleRun,
+  AutomationWatch,
+  ScheduleCadence,
+  ScheduleStatus,
+  WatchStatus,
+} from "@/types/automation";
 
 export async function saveWorkflow(workflow: Workflow): Promise<void> {
   return invoke("save_workflow", { workflow });
@@ -69,4 +78,105 @@ export async function trackEvent(
   properties: Record<string, unknown> = {}
 ): Promise<void> {
   return invoke("track_event", { eventName, properties });
+}
+
+export async function listWatches(): Promise<AutomationWatch[]> {
+  return invoke("list_watches");
+}
+
+export async function createWatch(params: {
+  workflow_id: string;
+  watch_path: string;
+  recursive: boolean;
+  file_glob: string;
+  debounce_ms?: number;
+  stability_ms?: number;
+}): Promise<AutomationWatch> {
+  return invoke("create_watch", params);
+}
+
+export async function updateWatch(params: {
+  id: string;
+  watch_path?: string;
+  recursive?: boolean;
+  file_glob?: string;
+  debounce_ms?: number;
+  stability_ms?: number;
+}): Promise<AutomationWatch> {
+  return invoke("update_watch", params);
+}
+
+export async function toggleWatch(
+  id: string,
+  status: WatchStatus
+): Promise<AutomationWatch> {
+  return invoke("toggle_watch", { id, status });
+}
+
+export async function deleteWatch(id: string): Promise<boolean> {
+  return invoke("delete_watch", { id });
+}
+
+export async function listAutomationRuns(params: {
+  watch_id?: string;
+  workflow_id?: string;
+  limit?: number;
+  cursor?: number;
+} = {}): Promise<AutomationRun[]> {
+  return invoke("list_automation_runs", params);
+}
+
+export async function getAutomationRunnerEnabled(): Promise<boolean> {
+  return invoke("get_automation_runner_enabled");
+}
+
+export async function setAutomationRunnerEnabled(
+  enabled: boolean
+): Promise<boolean> {
+  return invoke("set_automation_runner_enabled", { enabled });
+}
+
+export async function listSchedules(): Promise<AutomationSchedule[]> {
+  return invoke("list_schedules");
+}
+
+export async function createSchedule(params: {
+  workflow_id: string;
+  cadence: ScheduleCadence;
+  hourly_interval?: number;
+  weekly_days?: string[];
+  hour?: number;
+  minute?: number;
+}): Promise<AutomationSchedule> {
+  return invoke("create_schedule", params);
+}
+
+export async function toggleSchedule(
+  id: string,
+  status: ScheduleStatus
+): Promise<AutomationSchedule> {
+  return invoke("toggle_schedule", { id, status });
+}
+
+export async function deleteSchedule(id: string): Promise<boolean> {
+  return invoke("delete_schedule", { id });
+}
+
+export async function listScheduleRuns(params: {
+  schedule_id?: string;
+  workflow_id?: string;
+  limit?: number;
+  cursor?: number;
+} = {}): Promise<AutomationScheduleRun[]> {
+  return invoke("list_schedule_runs", params);
+}
+
+export async function runWatchNow(watch_id: string): Promise<AutomationRun> {
+  return invoke("run_watch_now", { watchId: watch_id });
+}
+
+export async function getLastFailedRun(
+  watch_id: string
+): Promise<AutomationRun | null> {
+  return invoke("get_last_failed_run", { watchId: watch_id });
 }
