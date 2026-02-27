@@ -1,20 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
-import { FolderOpen, Loader2, Pause, Play, Trash2 } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkflowStore } from "@/stores/workflowStore";
 import { useAutomationStore } from "@/stores/automationStore";
 import type { WatchStatus } from "@/types/automation";
+import type { AutomationWatch } from "@/types/automation";
+import { trackEvent } from "@/lib/analytics";
 import { AutomationSchedulePanel } from "@/components/layout/AutomationSchedulePanel";
+import { AutomationHealthSection } from "@/components/layout/AutomationHealthSection";
+import { AutomationCreateWatchForm } from "@/components/layout/AutomationCreateWatchForm";
+import { AutomationWatchList } from "@/components/layout/AutomationWatchList";
+import { AutomationRecentRuns } from "@/components/layout/AutomationRecentRuns";
 
 export function AutomationPanel() {
   const { workflows } = useWorkflowStore();
-  const { enabled, watches, runs, loading, fetchAll, setRunnerEnabled, createWatch, toggleWatch, deleteWatch } =
-    useAutomationStore();
-  const [workflowId, setWorkflowId] = useState("");
-  const [watchPath, setWatchPath] = useState("");
-  const [fileGlob, setFileGlob] = useState("*.*");
-  const [recursive, setRecursive] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const {
+    enabled,
+    loading,
+    fetchAll,
+    createWatch,
+    toggleWatch,
+    deleteWatch,
+    runWatchNow,
+    getLastFailedRun,
+    getSortedWatches,
+    getHealthSnapshot,
+    getRecentRuns,
+  } = useAutomationStore();
+  const [busyWatchId, setBusyWatchId] = useState<string | null>(null);
+  const [failureMessages, setFailureMessages] = useState<
+    Record<string, string | null | undefined>
+  >({});
+  const trackedViewRef = useRef(false);
 
   useEffect(() => {
     void fetchAll();
@@ -24,159 +39,152 @@ export function AutomationPanel() {
     return () => window.clearInterval(timer);
   }, [fetchAll]);
 
+  const sortedWatches = getSortedWatches();
+  const healthSnapshot = getHealthSnapshot();
+  const recentRuns = getRecentRuns(8);
+
+  useEffect(() => {
+    if (trackedViewRef.current || loading) {
+      return;
+    }
+    trackedViewRef.current = true;
+    void trackEvent("automation_dashboard_viewed", {
+      watches_count: sortedWatches.length,
+      active_count: healthSnapshot.active_watches,
+      runner_enabled: enabled,
+    });
+  }, [enabled, healthSnapshot.active_watches, loading, sortedWatches.length]);
+
   const workflowMap = useMemo(
     () => new Map(workflows.map((workflow) => [workflow.id, workflow.name])),
     [workflows]
   );
 
-  const handleBrowse = async () => {
-    const selected = await open({ directory: true, multiple: false });
-    if (typeof selected === "string") {
-      setWatchPath(selected);
-    }
-  };
+  const trackQuickAction = (action: string, watch: AutomationWatch) =>
+    trackEvent("automation_quick_action_clicked", {
+      action,
+      watch_id: watch.id,
+      workflow_id: watch.workflow_id,
+      status_before: watch.status,
+    });
 
-  const handleCreate = async () => {
-    if (!workflowId || !watchPath.trim() || saving) return;
-    setSaving(true);
+  const handleCreateWatch = async (values: {
+    workflowId: string;
+    watchPath: string;
+    recursive: boolean;
+    fileGlob: string;
+  }) => {
     try {
       await createWatch({
-        workflowId,
-        watchPath: watchPath.trim(),
-        recursive,
-        fileGlob: fileGlob.trim() || "*.*",
+        workflowId: values.workflowId,
+        watchPath: values.watchPath,
+        recursive: values.recursive,
+        fileGlob: values.fileGlob,
       });
-      setWatchPath("");
-      setFileGlob("*.*");
-    } finally {
-      setSaving(false);
+    } catch (error) {
+      console.error("failed to create watch", error);
     }
   };
 
   const nextStatus = (status: WatchStatus): WatchStatus =>
     status === "active" ? "paused" : "active";
 
+  const handleRunNow = async (watch: AutomationWatch) => {
+    setBusyWatchId(watch.id);
+    try {
+      await trackQuickAction("run_now", watch);
+      await runWatchNow(watch.id);
+    } finally {
+      setBusyWatchId(null);
+    }
+  };
+
+  const handleToggle = async (watch: AutomationWatch) => {
+    setBusyWatchId(watch.id);
+    try {
+      const status = nextStatus(watch.status);
+      await trackQuickAction("toggle_status", watch);
+      await toggleWatch(watch.id, status);
+    } finally {
+      setBusyWatchId(null);
+    }
+  };
+
+  const handleDisable = async (watch: AutomationWatch) => {
+    if (watch.status === "disabled") {
+      return;
+    }
+    setBusyWatchId(watch.id);
+    try {
+      await trackQuickAction("disable_watch", watch);
+      await toggleWatch(watch.id, "disabled");
+    } finally {
+      setBusyWatchId(null);
+    }
+  };
+
+  const handleDelete = async (watch: AutomationWatch) => {
+    setBusyWatchId(watch.id);
+    try {
+      await trackQuickAction("delete_watch", watch);
+      await deleteWatch(watch.id);
+      setFailureMessages((current) => {
+        const next = { ...current };
+        delete next[watch.id];
+        return next;
+      });
+    } finally {
+      setBusyWatchId(null);
+    }
+  };
+
+  const handleOpenLastFailure = async (watch: AutomationWatch) => {
+    setBusyWatchId(watch.id);
+    try {
+      await trackQuickAction("open_last_failure", watch);
+      const failedRun = await getLastFailedRun(watch.id);
+      setFailureMessages((current) => ({
+        ...current,
+        [watch.id]: failedRun?.error_message ?? null,
+      }));
+    } finally {
+      setBusyWatchId(null);
+    }
+  };
+
   return (
-    <div className="border-b border-border p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Automations
-        </p>
-        <label className="flex items-center gap-1 text-[11px] text-foreground">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(event) => void setRunnerEnabled(event.target.checked)}
-          />
-          Beta
-        </label>
-      </div>
+    <div className="space-y-3">
+      <AutomationHealthSection enabled={enabled} snapshot={healthSnapshot} />
 
-      <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
-        <select
-          value={workflowId}
-          onChange={(event) => setWorkflowId(event.target.value)}
-          className="w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
-        >
-          <option value="">Select workflow</option>
-          {workflows.map((workflow) => (
-            <option key={workflow.id} value={workflow.id}>
-              {workflow.name}
-            </option>
-          ))}
-        </select>
-        <div className="flex gap-1">
-          <input
-            value={watchPath}
-            onChange={(event) => setWatchPath(event.target.value)}
-            placeholder="Folder path..."
-            className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
-          />
-          <button
-            onClick={handleBrowse}
-            className="rounded-md border border-input bg-background px-2 text-muted-foreground hover:bg-accent/40"
-            title="Pick folder"
-          >
-            <FolderOpen size={12} />
-          </button>
+      <AutomationCreateWatchForm
+        workflows={workflows}
+        enabled={enabled}
+        onCreateWatch={handleCreateWatch}
+      />
+
+      <AutomationWatchList
+        watches={sortedWatches}
+        workflowNameMap={workflowMap}
+        enabled={enabled}
+        busyWatchId={busyWatchId}
+        failureMessages={failureMessages}
+        onRunNow={handleRunNow}
+        onToggle={handleToggle}
+        onDisable={handleDisable}
+        onDelete={handleDelete}
+        onOpenLastFailure={handleOpenLastFailure}
+      />
+
+      <AutomationRecentRuns runs={recentRuns} workflowNameMap={workflowMap} />
+
+      <details className="rounded-lg border border-border bg-muted/20 p-2">
+        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Schedules
+        </summary>
+        <div className="mt-2">
+          <AutomationSchedulePanel workflowMap={workflowMap} />
         </div>
-        <div className="flex gap-1">
-          <input
-            value={fileGlob}
-            onChange={(event) => setFileGlob(event.target.value)}
-            placeholder="*.pdf"
-            className="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs"
-          />
-          <label className="flex items-center gap-1 rounded-md border border-input bg-background px-2 text-[11px]">
-            <input
-              type="checkbox"
-              checked={recursive}
-              onChange={(event) => setRecursive(event.target.checked)}
-            />
-            Rec
-          </label>
-        </div>
-        <button
-          onClick={handleCreate}
-          disabled={!enabled || !workflowId || !watchPath.trim() || saving}
-          className="flex w-full items-center justify-center gap-1 rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground disabled:opacity-40"
-        >
-          {saving ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
-          Create Watch
-        </button>
-      </div>
-
-      <div className="mt-2 space-y-1">
-        {watches.map((watch) => (
-          <div key={watch.id} className="rounded-md border border-border bg-background p-2 text-xs">
-            <p className="truncate font-medium">{workflowMap.get(watch.workflow_id) ?? watch.workflow_id}</p>
-            <p className="truncate text-muted-foreground">{watch.watch_path}</p>
-            <p className="text-[11px] text-muted-foreground">{watch.file_glob} · {watch.status}</p>
-            <div className="mt-1 flex gap-1">
-              <button
-                onClick={() => void toggleWatch(watch.id, nextStatus(watch.status))}
-                disabled={!enabled}
-                className="rounded-md border border-input px-2 py-0.5 text-[11px]"
-              >
-                {watch.status === "active" ? <Pause size={11} /> : <Play size={11} />}
-              </button>
-              <button
-                onClick={() => void toggleWatch(watch.id, "disabled")}
-                className="rounded-md border border-input px-2 py-0.5 text-[11px]"
-              >
-                Disable
-              </button>
-              <button
-                onClick={() => void deleteWatch(watch.id)}
-                className="rounded-md border border-destructive/40 px-2 py-0.5 text-destructive"
-              >
-                <Trash2 size={11} />
-              </button>
-            </div>
-          </div>
-        ))}
-        {!loading && watches.length === 0 && (
-          <p className="text-center text-[11px] text-muted-foreground">
-            No automation watches yet.
-          </p>
-        )}
-      </div>
-
-      <div className="mt-2 rounded-md border border-border bg-muted/20 p-2">
-        <p className="text-[11px] font-medium text-foreground">Recent runs</p>
-        <div className="mt-1 space-y-1">
-          {runs.slice(0, 5).map((run) => (
-            <p key={run.id} className="truncate text-[11px] text-muted-foreground">
-              {run.status} · {run.duration_ms}ms · {run.trigger_file_path}
-            </p>
-          ))}
-          {runs.length === 0 && (
-            <p className="text-[11px] text-muted-foreground">No automation runs yet.</p>
-          )}
-        </div>
-      </div>
-
-      <AutomationSchedulePanel workflowMap={workflowMap} />
+      </details>
     </div>
   );
 }

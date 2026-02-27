@@ -4,6 +4,7 @@ pub mod nodes;
 use crate::models::workflow::Workflow;
 use executor::{ExecutionContext, NodeData, NodeRegistry};
 use serde::Serialize;
+use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, Serialize)]
@@ -93,9 +94,13 @@ impl DagEngine {
         workflow: &Workflow,
         outputs: &HashMap<String, HashMap<String, NodeData>>,
         skipped: &HashSet<String>,
+        globals: Option<&Value>,
     ) -> (HashMap<String, NodeData>, bool) {
         let mut inputs = HashMap::new();
         inputs.insert("_config".to_string(), NodeData::Json(node_data.clone()));
+        if let Some(globals_json) = globals {
+            inputs.insert("_globals".to_string(), NodeData::Json(globals_json.clone()));
+        }
 
         let incoming_edges: Vec<_> = workflow
             .edges
@@ -157,6 +162,16 @@ impl DagEngine {
         workflow: &Workflow,
         extra_inputs: Option<HashMap<String, HashMap<String, NodeData>>>,
     ) -> Result<ExecutionOutput, String> {
+        self.execute_debug_with_globals(workflow, extra_inputs, None)
+            .await
+    }
+
+    pub async fn execute_debug_with_globals(
+        &self,
+        workflow: &Workflow,
+        extra_inputs: Option<HashMap<String, HashMap<String, NodeData>>>,
+        globals: Option<Value>,
+    ) -> Result<ExecutionOutput, String> {
         let total_start = std::time::Instant::now();
         let order = self.topological_sort(workflow)?;
 
@@ -178,7 +193,14 @@ impl DagEngine {
                 .ok_or_else(|| format!("No executor for node type: {}", node.node_type))?;
 
             let (mut inputs, should_skip) =
-                self.gather_inputs(node_id, &node.data, workflow, &outputs, &skipped);
+                self.gather_inputs(
+                    node_id,
+                    &node.data,
+                    workflow,
+                    &outputs,
+                    &skipped,
+                    globals.as_ref(),
+                );
 
             // Merge extra inputs (e.g., webhook request data) for this node
             if let Some(ref extra) = extra_inputs {

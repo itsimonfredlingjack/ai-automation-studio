@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import type {
+  AutomationHealthSnapshot,
   AutomationRun,
+  RecentRunItem,
   AutomationSchedule,
   AutomationScheduleRun,
   AutomationWatch,
@@ -33,6 +35,10 @@ interface AutomationStore {
   schedules: AutomationSchedule[];
   scheduleRuns: AutomationScheduleRun[];
   loading: boolean;
+  getSortedWatches: () => AutomationWatch[];
+  getRuns24h: () => AutomationRun[];
+  getHealthSnapshot: () => AutomationHealthSnapshot;
+  getRecentRuns: (limit?: number) => RecentRunItem[];
   fetchAll: () => Promise<void>;
   setRunnerEnabled: (enabled: boolean) => Promise<void>;
   createWatch: (input: CreateWatchInput) => Promise<void>;
@@ -45,6 +51,88 @@ interface AutomationStore {
   getLastFailedRun: (id: string) => Promise<AutomationRun | null>;
 }
 
+const RUN_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const WATCH_STATUS_ORDER: Record<WatchStatus, number> = {
+  active: 0,
+  paused: 1,
+  disabled: 2,
+};
+
+function toTimestamp(value: string): number {
+  return new Date(value).getTime();
+}
+
+function getFileName(path: string): string {
+  const normalizedPath = path.replaceAll("\\", "/");
+  const parts = normalizedPath.split("/");
+  const lastPart = parts[parts.length - 1];
+  return lastPart ?? path;
+}
+
+export function sortWatchesForDisplay(
+  watches: AutomationWatch[]
+): AutomationWatch[] {
+  return [...watches].sort((left, right) => {
+    const statusDiff =
+      WATCH_STATUS_ORDER[left.status] - WATCH_STATUS_ORDER[right.status];
+    if (statusDiff !== 0) {
+      return statusDiff;
+    }
+    return toTimestamp(right.updated_at) - toTimestamp(left.updated_at);
+  });
+}
+
+export function getRunsInLast24Hours(
+  runs: AutomationRun[],
+  now: number = Date.now()
+): AutomationRun[] {
+  return runs.filter((run) => {
+    const endedAt = toTimestamp(run.ended_at);
+    if (Number.isNaN(endedAt)) {
+      return false;
+    }
+    return now - endedAt <= RUN_WINDOW_MS;
+  });
+}
+
+export function buildAutomationHealthSnapshot(
+  watches: AutomationWatch[],
+  runs: AutomationRun[],
+  now: number = Date.now()
+): AutomationHealthSnapshot {
+  const runs24h = getRunsInLast24Hours(runs, now);
+  return {
+    active_watches: watches.filter((watch) => watch.status === "active").length,
+    paused_watches: watches.filter((watch) => watch.status === "paused").length,
+    disabled_watches: watches.filter((watch) => watch.status === "disabled")
+      .length,
+    successful_runs_24h: runs24h.filter((run) => run.status === "success")
+      .length,
+    failed_runs_24h: runs24h.filter((run) => run.status === "error").length,
+  };
+}
+
+export function toRecentRunItems(
+  runs: AutomationRun[],
+  limit: number = 8
+): RecentRunItem[] {
+  return [...runs]
+    .sort((left, right) => toTimestamp(right.ended_at) - toTimestamp(left.ended_at))
+    .slice(0, limit)
+    .map((run) => ({
+      id: run.id,
+      watch_id: run.watch_id,
+      workflow_id: run.workflow_id,
+      status: run.status,
+      duration_ms: run.duration_ms,
+      trigger_file_path: run.trigger_file_path,
+      trigger_file_name: getFileName(run.trigger_file_path),
+      ended_at: run.ended_at,
+      error_message: run.error_message,
+    }));
+}
+
 export const useAutomationStore = create<AutomationStore>((set, get) => ({
   enabled: false,
   watches: [],
@@ -52,6 +140,15 @@ export const useAutomationStore = create<AutomationStore>((set, get) => ({
   schedules: [],
   scheduleRuns: [],
   loading: false,
+
+  getSortedWatches: () => sortWatchesForDisplay(get().watches),
+
+  getRuns24h: () => getRunsInLast24Hours(get().runs),
+
+  getHealthSnapshot: () =>
+    buildAutomationHealthSnapshot(get().watches, get().runs),
+
+  getRecentRuns: (limit: number = 8) => toRecentRunItems(get().runs, limit),
 
   fetchAll: async () => {
     set({ loading: true });

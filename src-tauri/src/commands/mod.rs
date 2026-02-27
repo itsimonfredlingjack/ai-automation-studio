@@ -1,3 +1,4 @@
+pub mod ai_system;
 pub mod analytics;
 pub mod automation;
 pub mod automation_schedule;

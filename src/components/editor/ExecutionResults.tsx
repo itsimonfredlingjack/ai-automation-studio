@@ -1,12 +1,54 @@
 import { X, ChevronUp, ChevronDown, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { useExecutionStore } from "@/stores/executionStore";
-import { useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { useFlowStore } from "@/stores/flowStore";
 import { ExecutionSharePrompt } from "@/components/editor/ExecutionSharePrompt";
+import { deriveAiUsageSummary } from "@/lib/aiUsage";
+import { trackEvent } from "@/lib/analytics";
 
 export function ExecutionResults() {
   const { result, error, mode, showResults, closeResults } =
     useExecutionStore();
+  const { nodes } = useFlowStore();
   const [expanded, setExpanded] = useState(true);
+  const trackedAttestationRef = useRef<string | null>(null);
+
+  const aiUsageSummary = useMemo(
+    () =>
+      deriveAiUsageSummary({
+        steps: result?.steps ?? [],
+        nodes,
+        includeConfiguredFallback: true,
+      }),
+    [nodes, result?.steps]
+  );
+
+  const hasExecutedAiEvidence = (result?.steps ?? []).some(
+    (step) => step.node_type === "ai_agent"
+  );
+
+  useEffect(() => {
+    if (!showResults || (!result && !error) || aiUsageSummary.entries.length === 0) {
+      return;
+    }
+    const trackingKey = [
+      mode ?? "unknown",
+      result?.total_duration_ms ?? "no-result",
+      error ?? "ok",
+      aiUsageSummary.gpt_oss_count,
+      aiUsageSummary.non_gpt_oss_count,
+    ].join(":");
+    if (trackedAttestationRef.current === trackingKey) {
+      return;
+    }
+    trackedAttestationRef.current = trackingKey;
+    void trackEvent("gpt_oss_run_attested", {
+      mode,
+      ai_nodes_count: aiUsageSummary.entries.length,
+      gpt_oss_nodes_count: aiUsageSummary.gpt_oss_count,
+      non_gpt_oss_nodes_count: aiUsageSummary.non_gpt_oss_count,
+    });
+  }, [aiUsageSummary, error, mode, result, showResults]);
 
   if (!showResults) return null;
 
@@ -50,6 +92,62 @@ export function ExecutionResults() {
       {expanded && (
         <div className="max-h-64 overflow-y-auto p-4">
           <ExecutionSharePrompt error={error} mode={mode} result={result} />
+
+          {(result || error) && (
+            <div className="mb-3 rounded-md border border-border bg-muted/30 p-3">
+              <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                AI Models Used
+              </h4>
+              {aiUsageSummary.entries.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  No AI model used in this run.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {aiUsageSummary.entries.map((entry) => (
+                    <div
+                      key={`${entry.node_id}:${entry.source}`}
+                      className={`flex items-center justify-between rounded-md border px-2 py-1 text-xs ${
+                        entry.is_gpt_oss
+                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700"
+                          : "border-border bg-background text-foreground"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">
+                          {entry.provider} · {entry.model}
+                        </p>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {entry.source === "executed"
+                            ? "Executed"
+                            : "Configured fallback"}
+                          {entry.tool_mode ? " · Tool mode" : ""}
+                        </p>
+                      </div>
+                      {entry.is_gpt_oss && (
+                        <span className="rounded-full border border-current/40 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                          GPT-OSS
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {aiUsageSummary.non_gpt_oss_count > 0 && (
+                <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs text-amber-700">
+                  Mixed model run: {aiUsageSummary.non_gpt_oss_count} node
+                  {aiUsageSummary.non_gpt_oss_count === 1 ? "" : "s"} not GPT-OSS.
+                </p>
+              )}
+
+              {error && !hasExecutedAiEvidence && aiUsageSummary.entries.length > 0 && (
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Run failed before AI step evidence was captured. Showing configured AI nodes.
+                </p>
+              )}
+            </div>
+          )}
 
           {error && (
             <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">

@@ -29,6 +29,26 @@ export interface AutomationRun {
   error_message?: string;
 }
 
+export interface AutomationHealthSnapshot {
+  active_watches: number;
+  paused_watches: number;
+  disabled_watches: number;
+  successful_runs_24h: number;
+  failed_runs_24h: number;
+}
+
+export interface RecentRunItem {
+  id: string;
+  watch_id: string;
+  workflow_id: string;
+  status: AutomationRunStatus;
+  duration_ms: number;
+  trigger_file_path: string;
+  trigger_file_name: string;
+  ended_at: string;
+  error_message?: string;
+}
+
 export interface AutomationSchedule {
   id: string;
   workflow_id: string;

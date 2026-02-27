@@ -17,12 +17,6 @@ pub enum AppError {
     #[error("HTTP request error: {0}")]
     HttpRequest(String),
 
-    #[error("Code execution error: {0}")]
-    CodeExecution(String),
-
-    #[error("Timeout: {0}")]
-    Timeout(String),
-
     #[error("Webhook error: {0}")]
     Webhook(String),
 }

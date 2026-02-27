@@ -80,7 +80,14 @@ async fn run_watch_loop(
                         "workflow_id": watch.workflow_id,
                         "trigger_file_path": path.to_string_lossy().to_string()
                     }))?;
-                    let execute_result = execute_with_retry(&db_path, &watch.workflow_id, global_semaphore.clone()).await;
+                    let execute_result = execute_with_retry(
+                        &db_path,
+                        &watch,
+                        &path,
+                        &event_id,
+                        global_semaphore.clone(),
+                    )
+                    .await;
                     let run_result = persist_run(&db_path, &watch, &path, &event_id, execute_result).await?;
                     inflight.remove(&key);
                     if run_result {
@@ -129,19 +136,45 @@ async fn wait_for_stable_file(path: &Path, stability_ms: i64) -> bool {
 }
 async fn execute_with_retry(
     db_path: &Path,
-    workflow_id: &str,
+    watch: &crate::models::automation::AutomationWatch,
+    path: &Path,
+    event_id: &str,
     global_semaphore: Arc<Semaphore>,
 ) -> Result<i64, String> {
     let _permit = global_semaphore.acquire().await.map_err(|e| e.to_string())?;
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .to_string();
+    let globals = serde_json::json!({
+        "trigger_source": "watch",
+        "trigger_file_path": path.to_string_lossy().to_string(),
+        "trigger_file_name": file_name,
+        "watch_id": watch.id,
+        "trigger_event_id": event_id,
+        "analytics_db_path": db_path.to_string_lossy().to_string()
+    });
     for attempt in 0..=1 {
         let started = Instant::now();
         let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
-        let workflow = db::workflow::load_workflow(&conn, workflow_id)
+        let workflow = db::workflow::load_workflow(&conn, &watch.workflow_id)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Workflow not found: {}", workflow_id))?;
-        track_analytics(db_path, "automation_run_started", serde_json::json!({"workflow_id": workflow_id}))?;
+            .ok_or_else(|| format!("Workflow not found: {}", watch.workflow_id))?;
+        track_analytics(
+            db_path,
+            "automation_run_started",
+            serde_json::json!({
+                "workflow_id": watch.workflow_id,
+                "watch_id": watch.id,
+                "trigger_source": "watch"
+            }),
+        )?;
         let engine = DagEngine::new();
-        match engine.execute_debug(&workflow, None).await {
+        match engine
+            .execute_debug_with_globals(&workflow, None, Some(globals.clone()))
+            .await
+        {
             Ok(_) => return Ok(started.elapsed().as_millis() as i64),
             Err(err) if attempt == 0 => {
                 let _ = err;

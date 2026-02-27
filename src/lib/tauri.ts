@@ -9,6 +9,7 @@ import type {
   ScheduleStatus,
   WatchStatus,
 } from "@/types/automation";
+import type { GptOssStatus } from "@/types/aiSystem";
 
 export async function saveWorkflow(workflow: Workflow): Promise<void> {
   return invoke("save_workflow", { workflow });
@@ -179,4 +180,11 @@ export async function getLastFailedRun(
   watch_id: string
 ): Promise<AutomationRun | null> {
   return invoke("get_last_failed_run", { watchId: watch_id });
+}
+
+export async function checkGptOssStatus(params: {
+  base_url?: string;
+  model?: string;
+} = {}): Promise<GptOssStatus> {
+  return invoke("check_gpt_oss_status", params);
 }

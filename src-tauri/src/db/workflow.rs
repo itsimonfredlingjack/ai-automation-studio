@@ -45,12 +45,8 @@ pub fn load_workflow(conn: &Connection, id: &str) -> rusqlite::Result<Option<Wor
             description: row.get(2)?,
             nodes: serde_json::from_str(&nodes_json).unwrap_or_default(),
             edges: serde_json::from_str(&edges_json).unwrap_or_default(),
-            created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
-            updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
+            created_at: parse_rfc3339(&created_str, 5)?,
+            updated_at: parse_rfc3339(&updated_str, 6)?,
         })
     });
 
@@ -74,12 +70,8 @@ pub fn list_workflows(conn: &Connection) -> rusqlite::Result<Vec<WorkflowMetadat
             id: row.get(0)?,
             name: row.get(1)?,
             description: row.get(2)?,
-            created_at: chrono::DateTime::parse_from_rfc3339(&created_str)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
-            updated_at: chrono::DateTime::parse_from_rfc3339(&updated_str)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
+            created_at: parse_rfc3339(&created_str, 3)?,
+            updated_at: parse_rfc3339(&updated_str, 4)?,
         })
     })?;
 
@@ -89,4 +81,48 @@ pub fn list_workflows(conn: &Connection) -> rusqlite::Result<Vec<WorkflowMetadat
 pub fn delete_workflow(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
     let affected = conn.execute("DELETE FROM workflows WHERE id = ?1", params![id])?;
     Ok(affected > 0)
+}
+
+fn parse_rfc3339(value: &str, column: usize) -> rusqlite::Result<chrono::DateTime<chrono::Utc>> {
+    chrono::DateTime::parse_from_rfc3339(value)
+        .map(|datetime| datetime.with_timezone(&chrono::Utc))
+        .map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                column,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_workflow;
+    use crate::db::schema::initialize_db;
+    use rusqlite::{params, Connection};
+
+    #[test]
+    fn load_workflow_returns_error_for_invalid_timestamp() {
+        let conn = Connection::open_in_memory().expect("in-memory db");
+        initialize_db(&conn).expect("schema initialized");
+
+        conn.execute(
+            "INSERT INTO workflows (id, name, description, nodes_json, edges_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                "wf-invalid-ts",
+                "Invalid Timestamp Workflow",
+                Option::<String>::None,
+                "[]",
+                "[]",
+                "not-a-timestamp",
+                "2026-01-01T00:00:00Z",
+            ],
+        )
+        .expect("workflow inserted");
+
+        let result = load_workflow(&conn, "wf-invalid-ts");
+
+        assert!(result.is_err());
+    }
 }

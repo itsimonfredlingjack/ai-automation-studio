@@ -72,7 +72,7 @@ export function TemplateSharePanel() {
   };
 
   return (
-    <div className="border-b border-border p-3">
+    <div className="space-y-2 p-3">
       <div className="flex gap-2">
         <button
           onClick={handleShare}

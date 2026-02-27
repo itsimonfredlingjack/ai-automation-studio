@@ -50,7 +50,7 @@ impl WebhookManager {
         let db_path = self.db_path.clone();
         let wf_id = workflow_id.clone();
 
-        tokio::spawn(async move {
+        tauri::async_runtime::spawn(async move {
             if let Err(e) = run_server(db_path, wf_id, port, shutdown_rx).await {
                 log::error!("Webhook server error: {}", e);
             }
@@ -224,7 +224,16 @@ async fn webhook_handler(
     // Execute the workflow
     let engine = DagEngine::new();
     let result = match engine
-        .execute_debug(&workflow, Some(extra_inputs))
+        .execute_debug_with_globals(
+            &workflow,
+            Some(extra_inputs),
+            Some(serde_json::json!({
+                "trigger_source": "webhook",
+                "workflow_id": state.workflow_id,
+                "webhook_method": method.to_string(),
+                "analytics_db_path": state.db_path.to_string_lossy().to_string()
+            })),
+        )
         .await
     {
         Ok(r) => r,

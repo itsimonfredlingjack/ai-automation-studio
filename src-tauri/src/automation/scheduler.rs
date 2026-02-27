@@ -82,7 +82,7 @@ async fn execute_scheduled_run(
     }))?;
 
     let started_at = Utc::now();
-    let result = execute_with_retry(db_path, &schedule.workflow_id, global_semaphore).await;
+    let result = execute_with_retry(db_path, schedule, global_semaphore).await;
     let ended_at = Utc::now();
     let duration_ms = (ended_at - started_at).num_milliseconds().max(0);
     let (status, error_message, success) = match result {
@@ -131,17 +131,25 @@ async fn execute_scheduled_run(
 
 async fn execute_with_retry(
     db_path: &PathBuf,
-    workflow_id: &str,
+    schedule: &AutomationSchedule,
     global_semaphore: Arc<Semaphore>,
 ) -> Result<(), String> {
     let _permit = global_semaphore.acquire().await.map_err(|e| e.to_string())?;
+    let globals = serde_json::json!({
+        "trigger_source": "schedule",
+        "schedule_id": schedule.id,
+        "analytics_db_path": db_path.to_string_lossy().to_string()
+    });
     for attempt in 0..=1 {
         let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
-        let workflow = db::workflow::load_workflow(&conn, workflow_id)
+        let workflow = db::workflow::load_workflow(&conn, &schedule.workflow_id)
             .map_err(|e| e.to_string())?
-            .ok_or_else(|| format!("Workflow not found: {}", workflow_id))?;
+            .ok_or_else(|| format!("Workflow not found: {}", schedule.workflow_id))?;
         let engine = DagEngine::new();
-        match engine.execute_debug(&workflow, None).await {
+        match engine
+            .execute_debug_with_globals(&workflow, None, Some(globals.clone()))
+            .await
+        {
             Ok(_) => return Ok(()),
             Err(error) if attempt == 0 => {
                 let _ = error;

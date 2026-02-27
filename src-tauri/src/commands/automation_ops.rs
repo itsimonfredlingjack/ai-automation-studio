@@ -36,7 +36,18 @@ pub async fn run_watch_now(
 
     let started_at = Utc::now();
     let engine = DagEngine::new();
-    let execution_result = engine.execute_debug(&workflow, None).await;
+    let execution_result = engine
+        .execute_debug_with_globals(
+            &workflow,
+            None,
+            Some(serde_json::json!({
+                "trigger_source": "manual",
+                "watch_id": watch.id,
+                "trigger_event_id": format!("manual:{}", Uuid::new_v4()),
+                "analytics_db_path": state.db_path.to_string_lossy().to_string()
+            })),
+        )
+        .await;
     let ended_at = Utc::now();
     let duration_ms = (ended_at - started_at).num_milliseconds().max(0);
 

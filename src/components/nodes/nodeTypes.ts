@@ -47,7 +47,7 @@ export const NODE_PALETTE = [
     type: "ai_agent",
     label: "AI Agent",
     color: "bg-indigo-500",
-    description: "Call AI models (OpenAI, Anthropic, Ollama)",
+    description: "Call AI models and run doc pipeline tools",
   },
   {
     type: "switch",

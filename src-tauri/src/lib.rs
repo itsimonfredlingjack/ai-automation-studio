@@ -33,6 +33,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState {
+            db_path: db_path.clone(),
             db: Mutex::new(conn),
             webhooks: Mutex::new(WebhookManager::new(db_path)),
             automations: Mutex::new(AutomationManager::new(
@@ -47,6 +48,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::ai_system::check_gpt_oss_status,
             commands::analytics::track_event,
             commands::automation::list_watches,
             commands::automation::create_watch,

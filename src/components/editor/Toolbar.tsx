@@ -2,6 +2,7 @@ import { Play, FlaskConical, Loader2 } from "lucide-react";
 import { useExecutionStore } from "@/stores/executionStore";
 import { useWorkflowStore } from "@/stores/workflowStore";
 import { useFlowStore } from "@/stores/flowStore";
+import { useAiSystemStore } from "@/stores/aiSystemStore";
 import * as api from "@/lib/tauri";
 import { buildWorkflowPayload } from "@/lib/workflowPayload";
 
@@ -11,6 +12,7 @@ export function Toolbar() {
   const { currentWorkflowId, workflows, saveCurrentWorkflow } =
     useWorkflowStore();
   const { nodes, edges } = useFlowStore();
+  const { refreshGptOssStatus } = useAiSystemStore();
 
   const handleRun = async (runMode: "execute" | "test") => {
     if (!currentWorkflowId || isRunning) return;
@@ -21,6 +23,8 @@ export function Toolbar() {
     startExecution(runMode);
 
     try {
+      await refreshGptOssStatus();
+
       // Auto-save before executing
       const workflow = buildWorkflowPayload({
         workflowId: currentWorkflowId,
@@ -32,19 +36,12 @@ export function Toolbar() {
       });
       await saveCurrentWorkflow(workflow);
 
-      if (runMode === "test") {
-        const result = await api.executeWorkflowDebug(currentWorkflowId);
-        setResult(result);
-      } else {
-        const outputs = await api.executeWorkflow(currentWorkflowId);
-        setResult({
-          final_outputs: outputs,
-          steps: [],
-          total_duration_ms: 0,
-        });
-      }
+      const result = await api.executeWorkflowDebug(currentWorkflowId);
+      setResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      await refreshGptOssStatus();
     }
   };
 

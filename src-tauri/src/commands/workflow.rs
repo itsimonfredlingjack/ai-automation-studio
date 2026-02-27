@@ -40,9 +40,19 @@ pub async fn execute_workflow(
     };
 
     let engine = crate::engine::DagEngine::new();
-    let results = engine.execute(&workflow).await.map_err(AppError::Engine)?;
+    let results = engine
+        .execute_debug_with_globals(
+            &workflow,
+            None,
+            Some(serde_json::json!({
+                "trigger_source": "manual",
+                "analytics_db_path": state.db_path.to_string_lossy().to_string()
+            })),
+        )
+        .await
+        .map_err(AppError::Engine)?;
 
-    Ok(serde_json::to_value(results).unwrap())
+    Ok(serde_json::to_value(results.final_outputs).unwrap())
 }
 
 #[tauri::command]
@@ -57,7 +67,14 @@ pub async fn execute_workflow_debug(
 
     let engine = crate::engine::DagEngine::new();
     let results = engine
-        .execute_debug(&workflow, None)
+        .execute_debug_with_globals(
+            &workflow,
+            None,
+            Some(serde_json::json!({
+                "trigger_source": "manual",
+                "analytics_db_path": state.db_path.to_string_lossy().to_string()
+            })),
+        )
         .await
         .map_err(AppError::Engine)?;
 

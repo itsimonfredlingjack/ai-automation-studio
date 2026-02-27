@@ -14,6 +14,7 @@ import { nodeTypes } from "@/components/nodes/nodeTypes";
 import { NodePalette } from "./NodePalette";
 import { Toolbar } from "./Toolbar";
 import { ExecutionResults } from "./ExecutionResults";
+import { AutomationStatusStrip } from "./AutomationStatusStrip";
 
 export function FlowEditor() {
   const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode } =
@@ -54,6 +55,7 @@ export function FlowEditor() {
 
   return (
     <div className="flex h-full w-full flex-col">
+      <AutomationStatusStrip />
       <Toolbar />
       <div className="relative flex-1">
         <NodePalette />
