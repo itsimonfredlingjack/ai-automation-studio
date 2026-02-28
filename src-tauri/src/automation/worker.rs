@@ -16,9 +16,23 @@ pub fn spawn_watch_task(
     global_semaphore: Arc<Semaphore>,
 ) -> oneshot::Sender<()> {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    let db_path_for_alerts = db_path.clone();
+    let workflow_id = watch.workflow_id.clone();
+    let watch_id = watch.id.clone();
+    let watch_path = watch.watch_path.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(error) = run_watch_loop(db_path, watch, global_semaphore, shutdown_rx).await {
             log::error!("automation watch loop failed: {}", error);
+            let _ = db::runtime_alert::append_alert(
+                &db_path_for_alerts,
+                crate::models::runtime_alert::RuntimeAlertSource::WatchRunner,
+                crate::models::runtime_alert::RuntimeAlertSeverity::Error,
+                Some(&workflow_id),
+                Some(&watch_id),
+                None,
+                format!("automation watch loop failed: {error}"),
+                serde_json::json!({ "watch_path": watch_path }),
+            );
         }
     });
     shutdown_tx
@@ -100,6 +114,16 @@ async fn run_watch_loop(
                                 "watch_id": watch.id,
                                 "workflow_id": watch.workflow_id
                             }))?;
+                            let _ = db::runtime_alert::append_alert(
+                                &db_path,
+                                crate::models::runtime_alert::RuntimeAlertSource::WatchAutoPause,
+                                crate::models::runtime_alert::RuntimeAlertSeverity::Warning,
+                                Some(&watch.workflow_id),
+                                Some(&watch.id),
+                                None,
+                                format!("Watch {} auto-paused after repeated failures.", watch.id),
+                                serde_json::json!({ "watch_path": watch.watch_path }),
+                            );
                             return Ok(());
                         }
                     }
@@ -158,7 +182,7 @@ async fn execute_with_retry(
     });
     for attempt in 0..=1 {
         let started = Instant::now();
-        let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+        let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
         let workflow = db::workflow::load_workflow(&conn, &watch.workflow_id)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Workflow not found: {}", watch.workflow_id))?;
@@ -216,7 +240,7 @@ async fn persist_run(
         result_summary,
         error_message: error_message.clone(),
     };
-    let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+    let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
     db::automation::create_run(&conn, &run).map_err(|e| e.to_string())?;
     track_analytics(db_path, "automation_run_completed", serde_json::json!({
         "watch_id": watch.id, "workflow_id": watch.workflow_id, "status": status.as_str(),
@@ -238,7 +262,7 @@ fn extract_result_summary(output: &ExecutionOutput) -> Option<String> {
         })
 }
 fn pause_watch(db_path: &Path, watch_id: &str) -> Result<(), String> {
-    let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+    let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
     if let Some(mut watch) = db::automation::load_watch(&conn, watch_id).map_err(|e| e.to_string())? {
         watch.status = WatchStatus::Paused;
         watch.updated_at = Utc::now();
@@ -247,6 +271,6 @@ fn pause_watch(db_path: &Path, watch_id: &str) -> Result<(), String> {
     Ok(())
 }
 fn track_analytics(db_path: &Path, name: &str, properties: serde_json::Value) -> Result<(), String> {
-    let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+    let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
     db::analytics::track_event(&conn, name, &properties).map_err(|e| e.to_string())
 }

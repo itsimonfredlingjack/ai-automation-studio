@@ -7,8 +7,8 @@ use tauri::State;
 pub fn start_webhook(
     state: State<AppState>,
     workflow_id: String,
-    port: u16,
-) -> Result<String, AppError> {
+    port: Option<u16>,
+) -> Result<WebhookInfo, AppError> {
     let mut manager = state.webhooks.lock().unwrap();
     manager
         .start_listener(workflow_id, port)
@@ -28,6 +28,6 @@ pub fn stop_webhook(
 
 #[tauri::command]
 pub fn list_webhooks(state: State<AppState>) -> Result<Vec<WebhookInfo>, AppError> {
-    let manager = state.webhooks.lock().unwrap();
+    let mut manager = state.webhooks.lock().unwrap();
     Ok(manager.list_active())
 }

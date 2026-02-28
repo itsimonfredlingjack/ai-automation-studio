@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type {
   AutomationHealthSnapshot,
   AutomationRun,
+  RuntimeAlert,
   RecentRunItem,
   AutomationSchedule,
   AutomationScheduleRun,
@@ -32,6 +33,7 @@ interface AutomationStore {
   enabled: boolean;
   watches: AutomationWatch[];
   runs: AutomationRun[];
+  alerts: RuntimeAlert[];
   schedules: AutomationSchedule[];
   scheduleRuns: AutomationScheduleRun[];
   loading: boolean;
@@ -39,6 +41,7 @@ interface AutomationStore {
   getRuns24h: () => AutomationRun[];
   getHealthSnapshot: () => AutomationHealthSnapshot;
   getRecentRuns: (limit?: number) => RecentRunItem[];
+  getRecentAlerts: (limit?: number) => RuntimeAlert[];
   fetchAll: () => Promise<void>;
   setRunnerEnabled: (enabled: boolean) => Promise<void>;
   createWatch: (input: CreateWatchInput) => Promise<void>;
@@ -134,10 +137,20 @@ export function toRecentRunItems(
     }));
 }
 
+export function toRecentAlerts(
+  alerts: RuntimeAlert[],
+  limit: number = 5
+): RuntimeAlert[] {
+  return [...alerts]
+    .sort((left, right) => toTimestamp(right.created_at) - toTimestamp(left.created_at))
+    .slice(0, limit);
+}
+
 export const useAutomationStore = create<AutomationStore>((set, get) => ({
   enabled: false,
   watches: [],
   runs: [],
+  alerts: [],
   schedules: [],
   scheduleRuns: [],
   loading: false,
@@ -151,17 +164,20 @@ export const useAutomationStore = create<AutomationStore>((set, get) => ({
 
   getRecentRuns: (limit: number = 8) => toRecentRunItems(get().runs, limit),
 
+  getRecentAlerts: (limit: number = 5) => toRecentAlerts(get().alerts, limit),
+
   fetchAll: async () => {
     set({ loading: true });
     try {
-      const [enabled, watches, runs, schedules, scheduleRuns] = await Promise.all([
+      const [enabled, watches, runs, alerts, schedules, scheduleRuns] = await Promise.all([
         api.getAutomationRunnerEnabled(),
         api.listWatches(),
         api.listAutomationRuns({ limit: 25 }),
+        api.listRuntimeAlerts(20),
         api.listSchedules(),
         api.listScheduleRuns({ limit: 25 }),
       ]);
-      set({ enabled, watches, runs, schedules, scheduleRuns, loading: false });
+      set({ enabled, watches, runs, alerts, schedules, scheduleRuns, loading: false });
     } catch {
       set({ loading: false });
     }

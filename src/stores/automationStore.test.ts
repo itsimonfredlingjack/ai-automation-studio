@@ -3,9 +3,10 @@ import {
   buildAutomationHealthSnapshot,
   getRunsInLast24Hours,
   sortWatchesForDisplay,
+  toRecentAlerts,
   toRecentRunItems,
 } from "@/stores/automationStore";
-import type { AutomationRun, AutomationWatch } from "@/types/automation";
+import type { AutomationRun, AutomationWatch, RuntimeAlert } from "@/types/automation";
 
 const NOW = new Date("2026-02-27T12:00:00.000Z").getTime();
 
@@ -37,6 +38,20 @@ function makeRun(values: Partial<AutomationRun>): AutomationRun {
     duration_ms: values.duration_ms ?? 60_000,
     result_summary: values.result_summary,
     error_message: values.error_message,
+  };
+}
+
+function makeAlert(values: Partial<RuntimeAlert>): RuntimeAlert {
+  return {
+    id: values.id ?? "alert-1",
+    source: values.source ?? "watch_runner",
+    severity: values.severity ?? "error",
+    workflow_id: values.workflow_id ?? "workflow-1",
+    watch_id: values.watch_id,
+    schedule_id: values.schedule_id,
+    message: values.message ?? "watch failed",
+    details_json: values.details_json ?? {},
+    created_at: values.created_at ?? "2026-02-27T11:00:00.000Z",
   };
 }
 
@@ -139,5 +154,16 @@ describe("automationStore selectors", () => {
     expect(items[0].result_summary).toBe(
       "Moved report.pdf to /tmp/sorted/report.pdf"
     );
+  });
+
+  it("sorts recent alerts newest-first and enforces the requested limit", () => {
+    const alerts: RuntimeAlert[] = [
+      makeAlert({ id: "oldest", created_at: "2026-02-27T09:00:00.000Z" }),
+      makeAlert({ id: "newest", created_at: "2026-02-27T11:30:00.000Z" }),
+      makeAlert({ id: "middle", created_at: "2026-02-27T10:15:00.000Z" }),
+    ];
+
+    const items = toRecentAlerts(alerts, 2);
+    expect(items.map((alert) => alert.id)).toEqual(["newest", "middle"]);
   });
 });

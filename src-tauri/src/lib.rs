@@ -8,7 +8,6 @@ mod models;
 mod state;
 mod webhook;
 
-use rusqlite::Connection;
 use state::AppState;
 use std::sync::Mutex;
 use automation::manager::AutomationManager;
@@ -26,7 +25,7 @@ pub fn run() {
     std::fs::create_dir_all(&app_dir).expect("Could not create .synapse directory");
 
     let db_path = app_dir.join("synapse.db");
-    let conn = Connection::open(&db_path).expect("Could not open database");
+    let conn = db::open_connection(&db_path).expect("Could not open database");
 
     db::schema::initialize_db(&conn).expect("Could not initialize database");
 
@@ -51,6 +50,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::ai_system::check_gpt_oss_status,
             commands::analytics::track_event,
+            commands::runtime_alerts::list_runtime_alerts,
             commands::automation::list_watches,
             commands::automation::create_watch,
             commands::automation::update_watch,

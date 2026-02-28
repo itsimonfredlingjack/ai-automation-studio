@@ -49,7 +49,7 @@ impl AutomationManager {
             return Ok(());
         }
 
-        let conn = rusqlite::Connection::open(&self.db_path)
+        let conn = db::open_connection(&self.db_path)
             .map_err(|e| e.to_string())?;
         let active_watches =
             db::automation::list_active_watches(&conn).map_err(|e| e.to_string())?;

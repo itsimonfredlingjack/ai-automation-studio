@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { Workflow, WorkflowMetadata } from "@/types/workflow";
 import type {
   AutomationRun,
+  RuntimeAlert,
   AutomationSchedule,
   AutomationScheduleRun,
   AutomationWatch,
@@ -72,8 +73,8 @@ export interface WebhookInfo {
 
 export async function startWebhook(
   workflowId: string,
-  port: number
-): Promise<string> {
+  port?: number
+): Promise<WebhookInfo> {
   return invoke("start_webhook", { workflowId, port });
 }
 
@@ -83,6 +84,10 @@ export async function stopWebhook(workflowId: string): Promise<void> {
 
 export async function listWebhooks(): Promise<WebhookInfo[]> {
   return invoke("list_webhooks");
+}
+
+export async function listRuntimeAlerts(limit?: number): Promise<RuntimeAlert[]> {
+  return invoke("list_runtime_alerts", { limit });
 }
 
 export async function trackEvent(

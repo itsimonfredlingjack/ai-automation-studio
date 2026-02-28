@@ -2,6 +2,14 @@ export type WatchStatus = "active" | "paused" | "disabled";
 export type AutomationRunStatus = "success" | "error";
 export type ScheduleCadence = "hourly" | "weekly";
 export type ScheduleStatus = "active" | "paused" | "disabled";
+export type RuntimeAlertSeverity = "warning" | "error";
+export type RuntimeAlertSource =
+  | "webhook_bind"
+  | "webhook_server"
+  | "watch_runner"
+  | "schedule_runner"
+  | "watch_auto_pause"
+  | "schedule_auto_pause";
 
 export interface AutomationWatch {
   id: string;
@@ -28,6 +36,18 @@ export interface AutomationRun {
   duration_ms: number;
   result_summary?: string;
   error_message?: string;
+}
+
+export interface RuntimeAlert {
+  id: string;
+  source: RuntimeAlertSource;
+  severity: RuntimeAlertSeverity;
+  workflow_id?: string;
+  watch_id?: string;
+  schedule_id?: string;
+  message: string;
+  details_json: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface AutomationHealthSnapshot {

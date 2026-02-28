@@ -5,6 +5,7 @@ const { api } = vi.hoisted(() => ({
     getAutomationRunnerEnabled: vi.fn(),
     listWatches: vi.fn(),
     listAutomationRuns: vi.fn(),
+    listRuntimeAlerts: vi.fn(),
     listSchedules: vi.fn(),
     listScheduleRuns: vi.fn(),
     setAutomationRunnerEnabled: vi.fn(),
@@ -29,6 +30,7 @@ describe("automationStore command payloads", () => {
     api.getAutomationRunnerEnabled.mockResolvedValue(false);
     api.listWatches.mockResolvedValue([]);
     api.listAutomationRuns.mockResolvedValue([]);
+    api.listRuntimeAlerts.mockResolvedValue([]);
     api.listSchedules.mockResolvedValue([]);
     api.listScheduleRuns.mockResolvedValue([]);
     api.createWatch.mockResolvedValue({});
@@ -70,5 +72,11 @@ describe("automationStore command payloads", () => {
       hour: 9,
       minute: 30,
     });
+  });
+
+  it("fetches runtime alerts alongside other automation data", async () => {
+    await useAutomationStore.getState().fetchAll();
+
+    expect(api.listRuntimeAlerts).toHaveBeenCalledWith(20);
   });
 });

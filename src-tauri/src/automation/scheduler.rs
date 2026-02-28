@@ -15,9 +15,20 @@ pub fn spawn_schedule_task(
     global_semaphore: Arc<Semaphore>,
 ) -> oneshot::Sender<()> {
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
+    let db_path_for_alerts = db_path.clone();
     tauri::async_runtime::spawn(async move {
         if let Err(error) = run_schedule_loop(db_path, global_semaphore, shutdown_rx).await {
             log::error!("automation schedule loop failed: {}", error);
+            let _ = db::runtime_alert::append_alert(
+                &db_path_for_alerts,
+                crate::models::runtime_alert::RuntimeAlertSource::ScheduleRunner,
+                crate::models::runtime_alert::RuntimeAlertSeverity::Error,
+                None,
+                None,
+                None,
+                format!("automation schedule loop failed: {error}"),
+                serde_json::json!({}),
+            );
         }
     });
     shutdown_tx
@@ -53,6 +64,16 @@ async fn run_schedule_loop(
                             "schedule_id": schedule.id,
                             "workflow_id": schedule.workflow_id
                         }))?;
+                        let _ = db::runtime_alert::append_alert(
+                            &db_path,
+                            crate::models::runtime_alert::RuntimeAlertSource::ScheduleAutoPause,
+                            crate::models::runtime_alert::RuntimeAlertSeverity::Warning,
+                            Some(&schedule.workflow_id),
+                            None,
+                            Some(&schedule.id),
+                            format!("Schedule {} auto-paused after repeated failures.", schedule.id),
+                            serde_json::json!({}),
+                        );
                     }
                 }
             }
@@ -62,7 +83,7 @@ async fn run_schedule_loop(
 }
 
 fn load_due_schedules(db_path: &PathBuf) -> Result<Vec<AutomationSchedule>, String> {
-    let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+    let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
     db::automation_schedule::list_due_schedules(&conn, Utc::now(), 8).map_err(|e| e.to_string())
 }
 
@@ -114,7 +135,7 @@ async fn execute_scheduled_run(
     )?;
     updated.updated_at = ended_at;
 
-    let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+    let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
     db::automation_schedule_run::create_schedule_run(&conn, &run)
         .map_err(|e| e.to_string())?;
     db::automation_schedule::update_schedule(&conn, &updated).map_err(|e| e.to_string())?;
@@ -141,7 +162,7 @@ async fn execute_with_retry(
         "analytics_db_path": db_path.to_string_lossy().to_string()
     });
     for attempt in 0..=1 {
-        let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+        let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
         let workflow = db::workflow::load_workflow(&conn, &schedule.workflow_id)
             .map_err(|e| e.to_string())?
             .ok_or_else(|| format!("Workflow not found: {}", schedule.workflow_id))?;
@@ -162,7 +183,7 @@ async fn execute_with_retry(
 }
 
 fn auto_pause_schedule(db_path: &PathBuf, schedule_id: &str) -> Result<(), String> {
-    let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+    let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
     if let Some(mut schedule) =
         db::automation_schedule::load_schedule(&conn, schedule_id).map_err(|e| e.to_string())?
     {
@@ -178,6 +199,6 @@ fn track_analytics(
     event_name: &str,
     properties: serde_json::Value,
 ) -> Result<(), String> {
-    let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
+    let conn = db::open_connection(db_path).map_err(|e| e.to_string())?;
     db::analytics::track_event(&conn, event_name, &properties).map_err(|e| e.to_string())
 }

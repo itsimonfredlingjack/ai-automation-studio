@@ -10,8 +10,10 @@ import {
   createSchedule,
   createWatch,
   listAutomationRuns,
+  listRuntimeAlerts,
   listScheduleRuns,
   previewFileSortRule,
+  startWebhook,
   updateWatch,
 } from "@/lib/tauri";
 
@@ -127,6 +129,31 @@ describe("tauri command payload mapping", () => {
       destinationPath: "/tmp/sorted",
       fileGlob: "*.pdf",
       conflictPolicy: "keep_both",
+    });
+  });
+
+  it("maps auto-port webhook start and returns webhook info", async () => {
+    invoke.mockResolvedValue({
+      workflow_id: "workflow-1",
+      port: 43123,
+      url: "http://localhost:43123/webhook/workflow-1",
+    });
+
+    const result = await startWebhook("workflow-1");
+
+    expect(invoke).toHaveBeenCalledWith("start_webhook", {
+      workflowId: "workflow-1",
+      port: undefined,
+    });
+    expect(result.port).toBe(43123);
+    expect(result.url).toBe("http://localhost:43123/webhook/workflow-1");
+  });
+
+  it("maps runtime alert listing limit to camelCase tauri args", async () => {
+    await listRuntimeAlerts(5);
+
+    expect(invoke).toHaveBeenCalledWith("list_runtime_alerts", {
+      limit: 5,
     });
   });
 });

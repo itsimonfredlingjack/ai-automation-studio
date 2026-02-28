@@ -20,7 +20,7 @@ impl AnalyticsTracker {
         let Some(path) = &self.db_path else {
             return;
         };
-        let Ok(conn) = rusqlite::Connection::open(path) else {
+        let Ok(conn) = db::open_connection(path) else {
             return;
         };
         let _ = db::analytics::track_event(&conn, event_name, &properties);

@@ -25,6 +25,24 @@ pub fn initialize_db(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_analytics_events_name_created
             ON analytics_events(event_name, created_at DESC);
 
+        CREATE TABLE IF NOT EXISTS runtime_alerts (
+            id TEXT PRIMARY KEY,
+            source TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            workflow_id TEXT,
+            watch_id TEXT,
+            schedule_id TEXT,
+            message TEXT NOT NULL,
+            details_json TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_runtime_alerts_created
+            ON runtime_alerts(created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_runtime_alerts_source_created
+            ON runtime_alerts(source, created_at DESC);
+
         CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
             value_json TEXT NOT NULL,

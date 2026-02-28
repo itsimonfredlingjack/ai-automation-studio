@@ -5,6 +5,7 @@ import type { WatchStatus } from "@/types/automation";
 import type { AutomationWatch } from "@/types/automation";
 import { trackEvent } from "@/lib/analytics";
 import { AutomationSchedulePanel } from "@/components/layout/AutomationSchedulePanel";
+import { AutomationAlertsSection } from "@/components/layout/AutomationAlertsSection";
 import { AutomationHealthSection } from "@/components/layout/AutomationHealthSection";
 import { AutomationCreateWatchForm } from "@/components/layout/AutomationCreateWatchForm";
 import { AutomationWatchList } from "@/components/layout/AutomationWatchList";
@@ -24,6 +25,7 @@ export function AutomationPanel() {
     getSortedWatches,
     getHealthSnapshot,
     getRecentRuns,
+    getRecentAlerts,
   } = useAutomationStore();
   const [busyWatchId, setBusyWatchId] = useState<string | null>(null);
   const [failureMessages, setFailureMessages] = useState<
@@ -41,6 +43,7 @@ export function AutomationPanel() {
 
   const sortedWatches = getSortedWatches();
   const healthSnapshot = getHealthSnapshot();
+  const recentAlerts = getRecentAlerts(5);
   const recentRuns = getRecentRuns(8);
 
   useEffect(() => {
@@ -155,6 +158,11 @@ export function AutomationPanel() {
   return (
     <div className="space-y-3">
       <AutomationHealthSection enabled={enabled} snapshot={healthSnapshot} />
+
+      <AutomationAlertsSection
+        alerts={recentAlerts}
+        workflowNameMap={workflowMap}
+      />
 
       <AutomationCreateWatchForm
         workflows={workflows}
