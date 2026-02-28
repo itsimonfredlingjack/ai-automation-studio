@@ -11,6 +11,17 @@ import type {
 } from "@/types/automation";
 import type { GptOssStatus } from "@/types/aiSystem";
 
+export interface FileSortPreview {
+  matches: boolean;
+  source_path: string;
+  destination_dir: string;
+  proposed_path: string;
+  final_path: string;
+  action: "move";
+  conflict_resolution: "none" | "keep_both";
+  reason?: string;
+}
+
 export async function saveWorkflow(workflow: Workflow): Promise<void> {
   return invoke("save_workflow", { workflow });
 }
@@ -86,25 +97,39 @@ export async function listWatches(): Promise<AutomationWatch[]> {
 }
 
 export async function createWatch(params: {
-  workflow_id: string;
-  watch_path: string;
+  workflowId: string;
+  watchPath: string;
   recursive: boolean;
-  file_glob: string;
-  debounce_ms?: number;
-  stability_ms?: number;
+  fileGlob: string;
+  debounceMs?: number;
+  stabilityMs?: number;
 }): Promise<AutomationWatch> {
-  return invoke("create_watch", params);
+  return invoke("create_watch", {
+    workflowId: params.workflowId,
+    watchPath: params.watchPath,
+    recursive: params.recursive,
+    fileGlob: params.fileGlob,
+    debounceMs: params.debounceMs,
+    stabilityMs: params.stabilityMs,
+  });
 }
 
 export async function updateWatch(params: {
   id: string;
-  watch_path?: string;
+  watchPath?: string;
   recursive?: boolean;
-  file_glob?: string;
-  debounce_ms?: number;
-  stability_ms?: number;
+  fileGlob?: string;
+  debounceMs?: number;
+  stabilityMs?: number;
 }): Promise<AutomationWatch> {
-  return invoke("update_watch", params);
+  return invoke("update_watch", {
+    id: params.id,
+    watchPath: params.watchPath,
+    recursive: params.recursive,
+    fileGlob: params.fileGlob,
+    debounceMs: params.debounceMs,
+    stabilityMs: params.stabilityMs,
+  });
 }
 
 export async function toggleWatch(
@@ -119,12 +144,17 @@ export async function deleteWatch(id: string): Promise<boolean> {
 }
 
 export async function listAutomationRuns(params: {
-  watch_id?: string;
-  workflow_id?: string;
+  watchId?: string;
+  workflowId?: string;
   limit?: number;
   cursor?: number;
 } = {}): Promise<AutomationRun[]> {
-  return invoke("list_automation_runs", params);
+  return invoke("list_automation_runs", {
+    watchId: params.watchId,
+    workflowId: params.workflowId,
+    limit: params.limit,
+    cursor: params.cursor,
+  });
 }
 
 export async function getAutomationRunnerEnabled(): Promise<boolean> {
@@ -142,14 +172,21 @@ export async function listSchedules(): Promise<AutomationSchedule[]> {
 }
 
 export async function createSchedule(params: {
-  workflow_id: string;
+  workflowId: string;
   cadence: ScheduleCadence;
-  hourly_interval?: number;
-  weekly_days?: string[];
+  hourlyInterval?: number;
+  weeklyDays?: string[];
   hour?: number;
   minute?: number;
 }): Promise<AutomationSchedule> {
-  return invoke("create_schedule", params);
+  return invoke("create_schedule", {
+    workflowId: params.workflowId,
+    cadence: params.cadence,
+    hourlyInterval: params.hourlyInterval,
+    weeklyDays: params.weeklyDays,
+    hour: params.hour,
+    minute: params.minute,
+  });
 }
 
 export async function toggleSchedule(
@@ -164,12 +201,17 @@ export async function deleteSchedule(id: string): Promise<boolean> {
 }
 
 export async function listScheduleRuns(params: {
-  schedule_id?: string;
-  workflow_id?: string;
+  scheduleId?: string;
+  workflowId?: string;
   limit?: number;
   cursor?: number;
 } = {}): Promise<AutomationScheduleRun[]> {
-  return invoke("list_schedule_runs", params);
+  return invoke("list_schedule_runs", {
+    scheduleId: params.scheduleId,
+    workflowId: params.workflowId,
+    limit: params.limit,
+    cursor: params.cursor,
+  });
 }
 
 export async function runWatchNow(watch_id: string): Promise<AutomationRun> {
@@ -180,6 +222,22 @@ export async function getLastFailedRun(
   watch_id: string
 ): Promise<AutomationRun | null> {
   return invoke("get_last_failed_run", { watchId: watch_id });
+}
+
+export async function previewFileSortRule(params: {
+  samplePath: string;
+  watchPath: string;
+  destinationPath: string;
+  fileGlob: string;
+  conflictPolicy: "keep_both";
+}): Promise<FileSortPreview> {
+  return invoke("preview_file_sort_rule", {
+    samplePath: params.samplePath,
+    watchPath: params.watchPath,
+    destinationPath: params.destinationPath,
+    fileGlob: params.fileGlob,
+    conflictPolicy: params.conflictPolicy,
+  });
 }
 
 export async function checkGptOssStatus(params: {

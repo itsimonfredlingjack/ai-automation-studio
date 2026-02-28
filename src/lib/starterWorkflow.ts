@@ -2,14 +2,22 @@ import { v4 as uuidv4 } from "uuid";
 import type { Workflow } from "@/types/workflow";
 
 const DEFAULT_WORKFLOW_NAME = "GPT-OSS Starter Workflow";
+const DEFAULT_PROMPT = "Summarize the trigger file in concise bullet points.";
+
+interface CreateStarterWorkflowParams {
+  name?: string;
+  prompt?: string;
+}
 
 export function createGptOssStarterWorkflow(
-  name: string = DEFAULT_WORKFLOW_NAME
+  params: CreateStarterWorkflowParams = {}
 ): Workflow {
   const createdAt = new Date().toISOString();
   const textInputId = `text_input-${uuidv4()}`;
   const aiAgentId = `ai_agent-${uuidv4()}`;
   const textOutputId = `text_output-${uuidv4()}`;
+  const name = params.name ?? DEFAULT_WORKFLOW_NAME;
+  const prompt = params.prompt?.trim() || DEFAULT_PROMPT;
 
   return {
     id: uuidv4(),
@@ -22,7 +30,7 @@ export function createGptOssStarterWorkflow(
         node_type: "text_input",
         position: { x: 120, y: 200 },
         data: {
-          text: "Summarize the trigger file in concise bullet points.",
+          text: prompt,
         },
       },
       {

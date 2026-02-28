@@ -35,6 +35,7 @@ function makeRun(values: Partial<AutomationRun>): AutomationRun {
     started_at: values.started_at ?? "2026-02-27T11:00:00.000Z",
     ended_at: values.ended_at ?? "2026-02-27T11:01:00.000Z",
     duration_ms: values.duration_ms ?? 60_000,
+    result_summary: values.result_summary,
     error_message: values.error_message,
   };
 }
@@ -124,5 +125,19 @@ describe("automationStore selectors", () => {
     const items = toRecentRunItems(runs, 2);
     expect(items[0].trigger_file_name).toBe("new.pdf");
     expect(items[1].trigger_file_name).toBe("report.txt");
+  });
+
+  it("preserves run summaries for file automation history", () => {
+    const runs: AutomationRun[] = [
+      makeRun({
+        id: "sorted",
+        result_summary: "Moved report.pdf to /tmp/sorted/report.pdf",
+      }),
+    ];
+
+    const items = toRecentRunItems(runs, 1);
+    expect(items[0].result_summary).toBe(
+      "Moved report.pdf to /tmp/sorted/report.pdf"
+    );
   });
 });

@@ -1,5 +1,5 @@
 use crate::db;
-use crate::engine::DagEngine;
+use crate::engine::{executor::NodeData, ExecutionOutput, DagEngine};
 use crate::error::AppError;
 use crate::models::automation::{AutomationRun, RunStatus};
 use crate::state::AppState;
@@ -52,7 +52,7 @@ pub async fn run_watch_now(
     let duration_ms = (ended_at - started_at).num_milliseconds().max(0);
 
     let run = match execution_result {
-        Ok(_) => AutomationRun {
+        Ok(output) => AutomationRun {
             id: Uuid::new_v4().to_string(),
             watch_id: watch.id.clone(),
             workflow_id: watch.workflow_id.clone(),
@@ -62,6 +62,7 @@ pub async fn run_watch_now(
             started_at,
             ended_at,
             duration_ms,
+            result_summary: extract_result_summary(&output),
             error_message: None,
         },
         Err(error) => AutomationRun {
@@ -74,6 +75,7 @@ pub async fn run_watch_now(
             started_at,
             ended_at,
             duration_ms,
+            result_summary: None,
             error_message: Some(error),
         },
     };
@@ -95,6 +97,19 @@ pub async fn run_watch_now(
     }
 
     Ok(run)
+}
+
+fn extract_result_summary(output: &ExecutionOutput) -> Option<String> {
+    output
+        .steps
+        .iter()
+        .rev()
+        .find(|step| step.node_type == "file_sort")
+        .and_then(|step| step.outputs.get("output"))
+        .and_then(|value| match value {
+            NodeData::Text(text) => Some(text.clone()),
+            _ => None,
+        })
 }
 
 #[tauri::command]

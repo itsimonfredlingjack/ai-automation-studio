@@ -2,12 +2,20 @@ import { describe, expect, it } from "vitest";
 import { createGptOssStarterWorkflow } from "@/lib/starterWorkflow";
 
 describe("createGptOssStarterWorkflow", () => {
-  it("creates a valid starter workflow with gpt-oss ai settings", () => {
-    const workflow = createGptOssStarterWorkflow("Starter");
+  it("creates a valid starter workflow with gpt-oss ai settings and custom prompt", () => {
+    const workflow = createGptOssStarterWorkflow({
+      name: "GPT-OSS Summary Starter",
+      prompt: "Summarize the trigger file into bullets and highlight action items.",
+    });
 
-    expect(workflow.name).toBe("Starter");
+    expect(workflow.name).toBe("GPT-OSS Summary Starter");
     expect(workflow.nodes).toHaveLength(3);
     expect(workflow.edges).toHaveLength(2);
+
+    const textInputNode = workflow.nodes.find((node) => node.node_type === "text_input");
+    expect(textInputNode?.data.text).toBe(
+      "Summarize the trigger file into bullets and highlight action items."
+    );
 
     const aiNode = workflow.nodes.find((node) => node.node_type === "ai_agent");
     expect(aiNode).toBeDefined();

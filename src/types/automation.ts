@@ -26,6 +26,7 @@ export interface AutomationRun {
   started_at: string;
   ended_at: string;
   duration_ms: number;
+  result_summary?: string;
   error_message?: string;
 }
 
@@ -46,6 +47,7 @@ export interface RecentRunItem {
   trigger_file_path: string;
   trigger_file_name: string;
   ended_at: string;
+  result_summary?: string;
   error_message?: string;
 }
 

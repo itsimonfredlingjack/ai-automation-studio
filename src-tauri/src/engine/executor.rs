@@ -50,6 +50,7 @@ impl NodeRegistry {
         ));
         registry.register(Box::new(super::nodes::text_output::TextOutputExecutor));
         registry.register(Box::new(super::nodes::code_js::CodeJsExecutor));
+        registry.register(Box::new(super::nodes::file_sort::FileSortExecutor));
         registry.register(Box::new(super::nodes::ai_agent::AiAgentExecutor));
         registry.register(Box::new(super::nodes::switch::SwitchExecutor));
         registry.register(Box::new(

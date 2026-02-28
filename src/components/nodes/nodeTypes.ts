@@ -1,3 +1,4 @@
+import { FileSortNode } from "./FileSortNode";
 import { TextInputNode } from "./TextInputNode";
 import { TextTransformNode } from "./TextTransformNode";
 import { TextOutputNode } from "./TextOutputNode";
@@ -8,6 +9,7 @@ import { WebhookTriggerNode } from "./WebhookTriggerNode";
 import { WebhookRespondNode } from "./WebhookRespondNode";
 
 export const nodeTypes = {
+  file_sort: FileSortNode,
   text_input: TextInputNode,
   text_transform: TextTransformNode,
   text_output: TextOutputNode,

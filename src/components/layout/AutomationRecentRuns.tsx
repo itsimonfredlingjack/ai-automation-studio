@@ -49,6 +49,11 @@ export function AutomationRecentRuns({
           <p className="truncate text-[11px] text-muted-foreground">
             {run.trigger_file_path}
           </p>
+          {run.result_summary && (
+            <p className="truncate text-[11px] text-foreground">
+              {run.result_summary}
+            </p>
+          )}
           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
             <span>{run.duration_ms}ms</span>
             <span>{formatRelativeTime(run.ended_at)}</span>

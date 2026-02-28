@@ -1,6 +1,9 @@
 pub mod executor;
 pub mod nodes;
 
+#[cfg(test)]
+mod file_sort_integration_tests;
+
 use crate::models::workflow::Workflow;
 use executor::{ExecutionContext, NodeData, NodeRegistry};
 use serde::Serialize;

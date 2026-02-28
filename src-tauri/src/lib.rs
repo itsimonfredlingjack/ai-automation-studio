@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod automation;
+mod file_ops;
 pub mod engine;
 mod error;
 mod models;
@@ -65,6 +66,7 @@ pub fn run() {
             commands::automation_schedule::list_schedule_runs,
             commands::automation_ops::run_watch_now,
             commands::automation_ops::get_last_failed_run,
+            commands::file_sort::preview_file_sort_rule,
             commands::workflow::save_workflow,
             commands::workflow::load_workflow,
             commands::workflow::list_workflows,

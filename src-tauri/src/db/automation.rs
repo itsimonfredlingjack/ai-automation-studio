@@ -111,8 +111,8 @@ pub fn list_active_watches(
 pub fn create_run(conn: &Connection, run: &AutomationRun) -> rusqlite::Result<()> {
     conn.execute(
         "INSERT INTO automation_runs
-         (id, watch_id, workflow_id, trigger_file_path, trigger_event_id, status, started_at, ended_at, duration_ms, error_message)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         (id, watch_id, workflow_id, trigger_file_path, trigger_event_id, status, started_at, ended_at, duration_ms, result_summary, error_message)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             run.id,
             run.watch_id,
@@ -123,6 +123,7 @@ pub fn create_run(conn: &Connection, run: &AutomationRun) -> rusqlite::Result<()
             run.started_at.to_rfc3339(),
             run.ended_at.to_rfc3339(),
             run.duration_ms,
+            run.result_summary,
             run.error_message,
         ],
     )?;
@@ -137,7 +138,7 @@ pub fn list_runs(
     cursor: Option<i64>,
 ) -> rusqlite::Result<Vec<AutomationRun>> {
     let mut stmt = conn.prepare(
-        "SELECT id, watch_id, workflow_id, trigger_file_path, trigger_event_id, status, started_at, ended_at, duration_ms, error_message
+        "SELECT id, watch_id, workflow_id, trigger_file_path, trigger_event_id, status, started_at, ended_at, duration_ms, result_summary, error_message
          FROM automation_runs
          WHERE (?1 IS NULL OR watch_id = ?1)
            AND (?2 IS NULL OR workflow_id = ?2)
@@ -155,7 +156,8 @@ pub fn list_runs(
             started_at: parse_time(&row.get::<_, String>(6)?),
             ended_at: parse_time(&row.get::<_, String>(7)?),
             duration_ms: row.get(8)?,
-            error_message: row.get(9)?,
+            result_summary: row.get(9)?,
+            error_message: row.get(10)?,
         })
     })?;
     rows.collect()

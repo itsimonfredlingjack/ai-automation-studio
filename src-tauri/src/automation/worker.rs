@@ -1,6 +1,6 @@
 use crate::automation::filters::{is_temporary_file, matches_glob};
 use crate::db;
-use crate::engine::DagEngine;
+use crate::engine::{executor::NodeData, ExecutionOutput, DagEngine};
 use crate::models::automation::{AutomationRun, RunStatus, WatchStatus};
 use chrono::Utc;
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
@@ -140,7 +140,7 @@ async fn execute_with_retry(
     path: &Path,
     event_id: &str,
     global_semaphore: Arc<Semaphore>,
-) -> Result<i64, String> {
+) -> Result<(i64, Option<String>), String> {
     let _permit = global_semaphore.acquire().await.map_err(|e| e.to_string())?;
     let file_name = path
         .file_name()
@@ -152,6 +152,7 @@ async fn execute_with_retry(
         "trigger_file_path": path.to_string_lossy().to_string(),
         "trigger_file_name": file_name,
         "watch_id": watch.id,
+        "watch_path": watch.watch_path,
         "trigger_event_id": event_id,
         "analytics_db_path": db_path.to_string_lossy().to_string()
     });
@@ -175,7 +176,12 @@ async fn execute_with_retry(
             .execute_debug_with_globals(&workflow, None, Some(globals.clone()))
             .await
         {
-            Ok(_) => return Ok(started.elapsed().as_millis() as i64),
+            Ok(output) => {
+                return Ok((
+                    started.elapsed().as_millis() as i64,
+                    extract_result_summary(&output),
+                ))
+            }
             Err(err) if attempt == 0 => {
                 let _ = err;
                 tokio::time::sleep(Duration::from_secs(5)).await;
@@ -190,12 +196,12 @@ async fn persist_run(
     watch: &crate::models::automation::AutomationWatch,
     path: &Path,
     event_id: &str,
-    run_result: Result<i64, String>,
+    run_result: Result<(i64, Option<String>), String>,
 ) -> Result<bool, String> {
     let started_at = Utc::now();
-    let (status, duration_ms, error_message) = match run_result {
-        Ok(duration) => (RunStatus::Success, duration, None),
-        Err(error) => (RunStatus::Error, 0, Some(error)),
+    let (status, duration_ms, result_summary, error_message) = match run_result {
+        Ok((duration, summary)) => (RunStatus::Success, duration, summary, None),
+        Err(error) => (RunStatus::Error, 0, None, Some(error)),
     };
     let run = AutomationRun {
         id: Uuid::new_v4().to_string(),
@@ -207,6 +213,7 @@ async fn persist_run(
         started_at,
         ended_at: Utc::now(),
         duration_ms,
+        result_summary,
         error_message: error_message.clone(),
     };
     let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;
@@ -216,6 +223,19 @@ async fn persist_run(
         "duration_ms": duration_ms
     }))?;
     Ok(status == RunStatus::Success)
+}
+
+fn extract_result_summary(output: &ExecutionOutput) -> Option<String> {
+    output
+        .steps
+        .iter()
+        .rev()
+        .find(|step| step.node_type == "file_sort")
+        .and_then(|step| step.outputs.get("output"))
+        .and_then(|value| match value {
+            NodeData::Text(text) => Some(text.clone()),
+            _ => None,
+        })
 }
 fn pause_watch(db_path: &Path, watch_id: &str) -> Result<(), String> {
     let conn = rusqlite::Connection::open(db_path).map_err(|e| e.to_string())?;

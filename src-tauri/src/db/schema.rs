@@ -58,6 +58,7 @@ pub fn initialize_db(conn: &Connection) -> rusqlite::Result<()> {
             started_at TEXT NOT NULL,
             ended_at TEXT NOT NULL,
             duration_ms INTEGER NOT NULL DEFAULT 0,
+            result_summary TEXT,
             error_message TEXT,
             FOREIGN KEY (watch_id) REFERENCES automation_watches(id) ON DELETE CASCADE,
             FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE
@@ -102,6 +103,29 @@ pub fn initialize_db(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_automation_schedule_runs_started
             ON automation_schedule_runs(schedule_id, started_at DESC);
         ",
+    )?;
+    ensure_column(conn, "automation_runs", "result_summary", "TEXT")?;
+    Ok(())
+}
+
+fn ensure_column(
+    conn: &Connection,
+    table_name: &str,
+    column_name: &str,
+    column_definition: &str,
+) -> rusqlite::Result<()> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table_name})"))?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let existing_name: String = row.get(1)?;
+        if existing_name == column_name {
+            return Ok(());
+        }
+    }
+
+    conn.execute(
+        &format!("ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"),
+        [],
     )?;
     Ok(())
 }

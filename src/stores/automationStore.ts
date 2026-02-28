@@ -129,6 +129,7 @@ export function toRecentRunItems(
       trigger_file_path: run.trigger_file_path,
       trigger_file_name: getFileName(run.trigger_file_path),
       ended_at: run.ended_at,
+      result_summary: run.result_summary,
       error_message: run.error_message,
     }));
 }
@@ -173,12 +174,12 @@ export const useAutomationStore = create<AutomationStore>((set, get) => ({
 
   createWatch: async (input: CreateWatchInput) => {
     await api.createWatch({
-      workflow_id: input.workflowId,
-      watch_path: input.watchPath,
+      workflowId: input.workflowId,
+      watchPath: input.watchPath,
       recursive: input.recursive,
-      file_glob: input.fileGlob,
-      debounce_ms: 1200,
-      stability_ms: 2000,
+      fileGlob: input.fileGlob,
+      debounceMs: 1200,
+      stabilityMs: 2000,
     });
     await get().fetchAll();
   },
@@ -195,10 +196,10 @@ export const useAutomationStore = create<AutomationStore>((set, get) => ({
 
   createSchedule: async (input: CreateScheduleInput) => {
     await api.createSchedule({
-      workflow_id: input.workflowId,
+      workflowId: input.workflowId,
       cadence: input.cadence,
-      hourly_interval: input.hourlyInterval,
-      weekly_days: input.weeklyDays,
+      hourlyInterval: input.hourlyInterval,
+      weeklyDays: input.weeklyDays,
       hour: input.hour,
       minute: input.minute,
     });

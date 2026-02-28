@@ -60,5 +60,6 @@ pub struct AutomationRun {
     pub started_at: DateTime<Utc>,
     pub ended_at: DateTime<Utc>,
     pub duration_ms: i64,
+    pub result_summary: Option<String>,
     pub error_message: Option<String>,
 }
