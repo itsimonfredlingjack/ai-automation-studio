@@ -16,7 +16,11 @@
 
 > **Synapse is a privacy-first, resource-efficient local AI automation studio.**
 
-Built from the ground up to handle intense AI workloads without compromising your system's performance, Synapse is the ideal desktop companion for AI-driven automation.
+Synapse is a local-first desktop automation studio built with `Tauri`, `React`, `TypeScript`, and `Rust`. It lets users create visual workflows, watch folders for new files, and run automations entirely on their own machine.
+
+The frontend provides the control center and workflow editor, while the Rust backend handles execution, file watching, automation logic, and local persistence through `SQLite`. AI workflows can run through local models like `GPT-OSS` via `Ollama`, with support for tool-calling and document pipelines.
+
+The result is a privacy-friendly automation app that combines file operations, AI processing, and visual workflow building in one desktop experience. Built from the ground up to handle intense AI workloads without compromising your system's performance, Synapse is the ideal desktop companion for AI-driven automation.
 
 Unlike Electron-based alternatives, Synapse leverages the power of **Tauri and Rust** to deliver a lightweight experience:
 - 💾 **Tiny footprint:** ~10 MB disk space.
